@@ -164,7 +164,6 @@ static u16 bnx2x_free_tx_pkt(struct bnx2x *bp, struct bnx2x_fp_txdata *txdata,
 
 	tx_start_bd = &txdata->tx_desc_ring[bd_idx].start_bd;
 
-
 	nbd = le16_to_cpu(tx_start_bd->nbd) - 1;
 #ifdef BNX2X_STOP_ON_ERROR
 	if ((nbd - 1) > (MAX_SKB_FRAGS + 2)) {
@@ -746,7 +745,6 @@ static void bnx2x_tpa_stop(struct bnx2x *bp, struct bnx2x_fastpath *fp,
 			dev_kfree_skb_any(skb);
 		}
 
-
 		/* put new data in bin */
 		rx_buf->data = new_data;
 
@@ -902,7 +900,6 @@ int bnx2x_rx_int(struct bnx2x_fastpath *fp, int budget)
 						cqe_fp);
 
 				goto next_rx;
-
 			}
 			queue = cqe->end_agg_cqe.queue_index;
 			tpa_info = &fp->tpa_info[queue];
@@ -2342,10 +2339,10 @@ static void bnx2x_nic_load_afex_dcc(struct bnx2x *bp, int load_code)
 static void bnx2x_bz_fp(struct bnx2x *bp, int index)
 {
 	struct bnx2x_fastpath *fp = &bp->fp[index];
-
 	int cos;
 	struct napi_struct orig_napi = fp->napi;
 	struct bnx2x_agg_info *orig_tpa_info = fp->tpa_info;
+
 	/* bzero bnx2x_fastpath contents */
 	if (fp->tpa_info)
 		memset(fp->tpa_info, 0, ETH_MAX_AGGREGATION_QUEUES_E1H_E2 *
@@ -2454,7 +2451,6 @@ int bnx2x_load_cnic(struct bnx2x *bp)
 	bp->cnic_loaded = true;
 	if (bp->state == BNX2X_STATE_OPEN)
 		bnx2x_cnic_notify(bp, CNIC_CTL_START_CMD);
-
 
 	DP(NETIF_MSG_IFUP, "Ending successfully CNIC-related load\n");
 
@@ -2983,7 +2979,6 @@ int bnx2x_nic_unload(struct bnx2x *bp, int unload_mode, bool keep_link)
 		if (global)
 			bnx2x_set_reset_global(bp);
 	}
-
 
 	/* The last driver must disable a "close the gate" if there is no
 	 * parity attention or "process kill" pending.
@@ -4536,7 +4531,6 @@ int bnx2x_alloc_mem_bp(struct bnx2x *bp)
 alloc_err:
 	bnx2x_free_mem_bp(bp);
 	return -ENOMEM;
-
 }
 
 int bnx2x_reload_if_running(struct net_device *dev)
@@ -4578,7 +4572,6 @@ int bnx2x_get_cur_phy_idx(struct bnx2x *bp)
 	}
 
 	return sel_phy_idx;
-
 }
 int bnx2x_get_link_cfg_idx(struct bnx2x *bp)
 {
@@ -4788,7 +4781,6 @@ int bnx2x_resume(struct pci_dev *pdev)
 	return rc;
 }
 
-
 void bnx2x_set_ctx_validation(struct bnx2x *bp, struct eth_context *cxt,
 			      u32 cid)
 {
@@ -4806,7 +4798,6 @@ static void storm_memset_hc_timeout(struct bnx2x *bp, u8 port,
 				    u8 fw_sb_id, u8 sb_index,
 				    u8 ticks)
 {
-
 	u32 addr = BAR_CSTRORM_INTMEM +
 		   CSTORM_STATUS_BLOCK_DATA_TIMEOUT_OFFSET(fw_sb_id, sb_index);
 	REG_WR8(bp, addr, ticks);
