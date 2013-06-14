@@ -81,6 +81,8 @@
 
 #define SO_SELECT_ERR_QUEUE	45
 
+#define SO_LL			46
+
 /* mainline kernel is using up to 53, select a number that is far
  * above to be on the safe side. We will try to get this number
  * into mainline but it will take a while. */
