@@ -1405,13 +1405,12 @@ EXPORT_SYMBOL(remove_arg_zero);
  */
 int search_binary_handler(struct linux_binprm *bprm)
 {
-	unsigned int depth = bprm->recursion_depth;
-	int try,retval;
+	int try, retval;
 	struct linux_binfmt *fmt;
 	pid_t old_pid, old_vpid;
 
 	/* This allows 4 levels of binfmt rewrites before failing hard. */
-	if (depth > 5)
+	if (bprm->recursion_depth > 5)
 		return -ELOOP;
 
 	retval = security_bprm_check(bprm);
@@ -1438,9 +1437,9 @@ int search_binary_handler(struct linux_binprm *bprm)
 			if (!try_module_get(fmt->module))
 				continue;
 			read_unlock(&binfmt_lock);
-			bprm->recursion_depth = depth + 1;
+			bprm->recursion_depth++;
 			retval = fn(bprm);
-			bprm->recursion_depth = depth;
+			bprm->recursion_depth--;
 			if (retval >= 0) {
 				if (depth == 0) {
 					trace_sched_process_exec(current, old_pid, bprm);
