@@ -64,10 +64,10 @@
 #define DDP_DEC_MAX_NUM_PARAM		18
 
 /* Default values used if user space does not set */
+#define COMPR_PLAYBACK_MAX_FRAGMENT_SIZE (256 * 1024)
 #define COMPR_PLAYBACK_MIN_FRAGMENT_SIZE (8 * 1024)
-#define COMPR_PLAYBACK_MAX_FRAGMENT_SIZE (128 * 1024)
 #define COMPR_PLAYBACK_MIN_NUM_FRAGMENTS (4)
-#define COMPR_PLAYBACK_MAX_NUM_FRAGMENTS (16 * 4)
+#define COMPR_PLAYBACK_MAX_NUM_FRAGMENTS (16 * 8)
 #define COMPR_PLAYBACK_DSP_FRAGMENT_SIZE (32 * 1024)
 
 #define COMPRESSED_LR_VOL_MAX_STEPS	0x2000
@@ -86,6 +86,7 @@ const DECLARE_TLV_DB_LINEAR(msm_compr_vol_gain, 0,
 #define STREAM_ARRAY_INDEX(stream_id) (stream_id - 1)
 
 #define MAX_NUMBER_OF_STREAMS 2
+#define COMPRESSED_MASTER_VOL_MAX_STEPS	0x2000
 
 struct msm_compr_gapless_state {
 	bool set_next_stream_id;
@@ -139,6 +140,10 @@ struct msm_compr_audio {
 	int32_t partial_drain_delay;
 
 	uint16_t session_id;
+	uint16_t bits_per_sample;
+
+	uint64_t lasttimestamp;
+	int32_t stream_end;
 
 	uint32_t sample_rate;
 	uint32_t num_channels;
@@ -888,7 +893,7 @@ static int msm_compr_configure_dsp(struct snd_compr_stream *cstream)
 		}
 	}
 
-	ret = msm_compr_set_volume(cstream, 0, 0);
+	ret = q6asm_set_volume(prtd->audio_client, COMPRESSED_MASTER_VOL_MAX_STEPS);
 	if (ret < 0)
 		pr_err("%s : Set Volume failed : %d", __func__, ret);
 
@@ -1049,13 +1054,17 @@ static int msm_compr_open(struct snd_compr_stream *cstream)
 	prtd->copied_total = 0;
 	prtd->byte_offset = 0;
 	prtd->sample_rate = 44100;
+	prtd->bits_per_sample = 16;
 	prtd->num_channels = 2;
 	prtd->drain_ready = 0;
 	prtd->last_buffer = 0;
 	prtd->first_buffer = 1;
 	prtd->partial_drain_delay = 0;
 	prtd->next_stream = 0;
+	prtd->stream_end = false;
+	prtd->lasttimestamp = 0;
 	memset(&prtd->gapless_state, 0, sizeof(struct msm_compr_gapless_state));
+	prtd->audio_client->session;
 	prtd->gapless_state.min_blk_size = 65537;
 	prtd->gapless_state.max_blk_size = 65537;
 	/*
@@ -1256,6 +1265,12 @@ static int msm_compr_set_params(struct snd_compr_stream *cstream,
 	case SND_AUDIOCODEC_PCM: {
 		pr_debug("SND_AUDIOCODEC_PCM\n");
 		prtd->codec = FORMAT_LINEAR_PCM;
+		pr_debug("SND_AUDIOCODEC_PCM format = %d, bits_per_sample=%d, prtd->bits_per_sample=%d \n",
+				prtd->bits_per_sample,
+				prtd->codec_param.codec.format,
+				prtd->codec_param.codec.format);
+		prtd->codec = FORMAT_LINEAR_PCM;
+		prtd->bits_per_sample = prtd->codec_param.codec.format;
 		break;
 	}
 
@@ -1313,6 +1328,11 @@ static int msm_compr_set_params(struct snd_compr_stream *cstream,
 
 	default:
 		pr_err("codec not supported, id =%d\n", params->codec.id);
+		return -EINVAL;
+	}
+
+	if ((prtd->codec != FORMAT_LINEAR_PCM) && (prtd->sample_rate > 48000)) {
+		pr_err("Out of bounds sample rate for codec %d", prtd->codec);
 		return -EINVAL;
 	}
 
@@ -1409,7 +1429,7 @@ static int msm_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 	struct msm_compr_pdata *pdata =
 			snd_soc_platform_get_drvdata(rtd->platform);
 	uint32_t *volume = pdata->volume[rtd->dai_link->be_id];
-	struct audio_client *ac = prtd->audio_client;
+	struct audio_client *ac;
 	unsigned long fe_id = rtd->dai_link->be_id;
 	int rc = 0;
 	int bytes_to_write;
@@ -1417,6 +1437,13 @@ static int msm_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 	int stream_id;
 	uint32_t stream_index;
 	uint16_t bits_per_sample = 16;
+
+	if (!prtd) {
+		pr_err("%s: cannot set from private_data\n", __func__);
+		return -EINVAL;
+	}
+
+        ac = prtd->audio_client;
 
 	if (cstream->direction != SND_COMPRESS_PLAYBACK) {
 		pr_err("%s: Unsupported stream type\n", __func__);
@@ -1479,6 +1506,9 @@ static int msm_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 		}
 		prtd->last_buffer = 0;
 		prtd->cmd_ack = 0;
+		pr_debug("reset lasttimestamp at SNDRV_PCM_TRIGGER_STOP\n");
+		prtd->stream_end = false;
+		prtd->lasttimestamp = 0;
 		if (!prtd->gapless_state.gapless_transition) {
 			pr_debug("issue CMD_FLUSH stream_id %d\n", stream_id);
 			spin_unlock_irqrestore(&prtd->lock, flags);
@@ -1612,6 +1642,8 @@ static int msm_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 				msecs_to_jiffies(prtd->partial_drain_delay));
 			pr_debug("%s: out of additional wait for low sample rate\n",
 				 __func__);
+			q6asm_get_session_time(prtd->audio_client, &prtd->lasttimestamp);
+			pr_debug("gapless: record stream end timestamp:%llu\n", prtd->lasttimestamp);
 			spin_lock_irqsave(&prtd->lock, flags);
 			if (prtd->cmd_interrupt) {
 				pr_debug("%s: additional wait interrupted by flush)\n",
@@ -1623,6 +1655,7 @@ static int msm_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 			}
 
 			/* move to next stream and reset vars */
+			prtd->stream_end = true;
 			pr_debug("%s: Moving to next stream in gapless\n",
 								__func__);
 			ac->stream_id = NEXT_STREAM_ID(ac->stream_id);
@@ -1693,7 +1726,10 @@ static int msm_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 			 * so prepare the current stream in session
 			 * for gapless playback
 			 */
+			q6asm_get_session_time(prtd->audio_client, &prtd->lasttimestamp);
+			pr_debug("record stream end timestamp:%llu\n", prtd->lasttimestamp);
 			spin_lock_irqsave(&prtd->lock, flags);
+			prtd->stream_end = true;
 			pr_debug("%s:issue CMD_PAUSE stream_id %d",
 					  __func__, ac->stream_id);
 			q6asm_stream_cmd_nowait(ac, CMD_PAUSE, ac->stream_id);
@@ -1708,9 +1744,9 @@ static int msm_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 			spin_lock_irqsave(&prtd->lock, flags);
 			/*
 			 * Don't reset these as these vars map to
-			 * total_bytes_transferred and total_bytes_available.
-			 * Just total_bytes_transferred will be updated
-			 * in the next avail() ioctl.
+			 * total_bytes_transferred and total_bytes_available
+			 * directly, only total_bytes_transferred will be updated
+			 * in the next avail() ioctl
 			 * prtd->copied_total = 0;
 			 * prtd->bytes_received = 0;
 			 * do not reset prtd->bytes_sent as well as the same
@@ -1839,6 +1875,8 @@ static int msm_compr_pointer(struct snd_compr_stream *cstream,
 	struct snd_compr_tstamp tstamp;
 	uint64_t timestamp = 0;
 	int rc = 0, first_buffer;
+	uint64_t lasttimestamp;
+	int32_t stream_end;
 	unsigned long flags;
 	uint32_t gapless_transition;
 
@@ -1850,6 +1888,8 @@ static int msm_compr_pointer(struct snd_compr_stream *cstream,
 	tstamp.byte_offset = prtd->byte_offset;
 	tstamp.copied_total = prtd->copied_total;
 	first_buffer = prtd->first_buffer;
+	stream_end = prtd->stream_end;
+	lasttimestamp = prtd->lasttimestamp;
 	if (atomic_read(&prtd->error)) {
 		pr_err("%s Got RESET EVENTS notification, return error",
 			__func__);
@@ -1866,7 +1906,9 @@ static int msm_compr_pointer(struct snd_compr_stream *cstream,
 	 Query timestamp from DSP if some data is with it.
 	 This prevents timeouts.
 	*/
-	if (!first_buffer || gapless_transition) {
+	if (stream_end) {
+		timestamp = lasttimestamp;
+	} else if (!first_buffer || gapless_transition) {
 		if (gapless_transition)
 			pr_debug("%s session time in gapless transition",
 				 __func__);
@@ -1991,6 +2033,10 @@ static int msm_compr_copy(struct snd_compr_stream *cstream,
 			pr_debug("%s: in xrun, count = %zd\n", __func__, count);
 			bytes_available = prtd->bytes_received - prtd->copied_total;
 			if (bytes_available >= prtd->dsp_fragment_size) {
+				if (prtd->stream_end){
+					pr_debug("reset lasttimestamp at msm_compr_send_buffer\n");
+					prtd->stream_end = false;
+				}
 				pr_debug("%s: handle xrun, bytes_to_write = %llu\n",
 					 __func__,
 					 bytes_available);
@@ -2030,7 +2076,7 @@ static int msm_compr_get_codec_caps(struct snd_compr_stream *cstream,
 
 	switch (codec->codec) {
 	case SND_AUDIOCODEC_MP3:
-		codec->num_descriptors = 2;
+		codec->num_descriptors = 3;
 		codec->descriptor[0].max_ch = 2;
 		memcpy(codec->descriptor[0].sample_rates,
 		       supported_sample_rates,
@@ -2045,7 +2091,7 @@ static int msm_compr_get_codec_caps(struct snd_compr_stream *cstream,
 		codec->descriptor[0].formats = 0;
 		break;
 	case SND_AUDIOCODEC_AAC:
-		codec->num_descriptors = 2;
+		codec->num_descriptors = 3;
 		codec->descriptor[1].max_ch = 2;
 		memcpy(codec->descriptor[1].sample_rates,
 		       supported_sample_rates,
@@ -2066,6 +2112,21 @@ static int msm_compr_get_codec_caps(struct snd_compr_stream *cstream,
 	case SND_AUDIOCODEC_EAC3:
 		break;
 	case SND_AUDIOCODEC_FLAC:
+		break;
+	case SND_AUDIOCODEC_PCM:
+		codec->num_descriptors = 3;
+		codec->descriptor[2].max_ch = 2;
+		memcpy(codec->descriptor[2].sample_rates,
+		       supported_sample_rates,
+		       sizeof(supported_sample_rates));
+		codec->descriptor[2].num_sample_rates =
+			sizeof(supported_sample_rates)/sizeof(unsigned int);
+		codec->descriptor[2].bit_rate[0] = 192;
+		codec->descriptor[2].bit_rate[1] = 8;
+		codec->descriptor[2].num_bitrates = 2;
+		codec->descriptor[2].profiles = 0;
+		codec->descriptor[2].modes = 0;
+		codec->descriptor[2].formats = 0;
 		break;
 	default:
 		pr_err("%s: Unsupported audio codec %d\n",
@@ -2100,6 +2161,11 @@ static int msm_compr_set_metadata(struct snd_compr_stream *cstream,
 		return 0;
 	}
 	ac = prtd->audio_client;
+	if (prtd->stream_end) {
+		pr_debug("reset lasttimestamp at setmetadata\n");
+		prtd->stream_end = false;
+		prtd->lasttimestamp = 0;
+	}
 	if (metadata->key == SNDRV_COMPRESS_ENCODER_PADDING) {
 		pr_debug("%s, got encoder padding %u", __func__, metadata->value[0]);
 		prtd->gapless_state.trailing_samples_drop = metadata->value[0];
