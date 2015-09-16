@@ -1165,6 +1165,12 @@ static int tomtom_config_compander(struct snd_soc_dapm_widget *w,
 		if (!tomtom->comp_enabled[comp])
 			break;
 
+		/* If EAR PA is enabled then compander should not be enabled */
+		if ((snd_soc_read(codec, TOMTOM_A_RX_EAR_EN) & 0x10) != 0) {
+			pr_debug("%s: EAR is enabled, do not enable compander\n",
+				 __func__);
+			break;
+		}
 		/* Set compander Sample rate */
 		snd_soc_update_bits(codec,
 				    TOMTOM_A_CDC_COMP0_FS_CFG + (comp * 8),
