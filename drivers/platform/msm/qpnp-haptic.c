@@ -285,6 +285,7 @@ struct qpnp_hap {
 	struct qpnp_pwm_info pwm_info;
 	struct mutex lock;
 	struct mutex wf_lock;
+	struct mutex set_lock;
 	spinlock_t td_lock;
 	struct work_struct td_work;
 	struct completion completion;
@@ -1607,6 +1608,12 @@ static void qpnp_timed_enable_worker(struct work_struct *work)
 	value = hap->td_value;
 	spin_unlock(&hap->td_lock);
 
+	/* Vibrator already disabled */
+	if (!value && !hap->state)
+		return;
+
+	flush_work(&hap->work);
+
 	mutex_lock(&hap->lock);
 	hrtimer_cancel(&hap->hap_timer);
 
@@ -1620,34 +1627,30 @@ static void qpnp_timed_enable_worker(struct work_struct *work)
 		value = (value > hap->timeout_ms ?
 				 hap->timeout_ms : value);
 		hap->state = 1;
-		hrtimer_start(&hap->hap_timer,
-			      ktime_set(value / 1000, (value % 1000) * 1000000),
-			      HRTIMER_MODE_REL);
 	}
 	mutex_unlock(&hap->lock);
 	if (hap->play_mode == QPNP_HAP_DIRECT)
 		qpnp_hap_set(hap, hap->state);
 	else
 		schedule_work(&hap->work);
+
+	if (value)
+		hrtimer_start(&hap->hap_timer,
+			      ktime_set(value / 1000, (value % 1000) * 1000000),
+			      HRTIMER_MODE_REL);
 }
 
 /* enable interface from timed output class */
 static void qpnp_hap_td_enable(struct timed_output_dev *dev, int value)
 {
-        struct qpnp_hap *hap = container_of(dev, struct qpnp_hap,
-                                         timed_dev);
+	struct qpnp_hap *hap = container_of(dev, struct qpnp_hap,
+					 timed_dev);
 
-        spin_lock(&hap->td_lock);
-        hap->td_value = value;
-        spin_unlock(&hap->td_lock);
+	spin_lock(&hap->td_lock);
+	hap->td_value = value;
+	spin_unlock(&hap->td_lock);
 
-        schedule_work(&hap->td_work);
-}
-
-void set_vibrate(int value)
-
-{
-	qpnp_hap_td_enable(&ghap->timed_dev, value);
+	schedule_work(&hap->td_work);
 }
 
 /* play pwm bytes */
@@ -1737,6 +1740,10 @@ static enum hrtimer_restart qpnp_hap_timer(struct hrtimer *timer)
 {
 	struct qpnp_hap *hap = container_of(timer, struct qpnp_hap,
 							 hap_timer);
+
+	/* Vibrator already disabled */
+	if (!hap->state)
+		return HRTIMER_NORESTART;
 
 	hap->state = 0;
 	schedule_work(&hap->work);
@@ -2294,8 +2301,8 @@ static int qpnp_haptic_probe(struct spmi_device *spmi)
 
 	mutex_init(&hap->lock);
 	mutex_init(&hap->wf_lock);
+	mutex_init(&hap->set_lock);
 	spin_lock_init(&hap->td_lock);
-
 	INIT_WORK(&hap->work, qpnp_hap_worker);
 	init_completion(&hap->completion);
 	INIT_WORK(&hap->td_work, qpnp_timed_enable_worker);
