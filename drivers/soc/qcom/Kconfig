@@ -698,6 +698,14 @@ config TRACER_PKT
 	  processor communication protocols. The profiling information
 	  can be logged into the tracer packet itself.
 
+config MSM_HOTPLUG
+	bool "MSM hotplug driver"
+	depends on HOTPLUG_CPU
+	default n
+	help
+	  The MSM hotplug driver controls on-/offlining of additional cores based
+	  on current cpu load.
+
 source "drivers/soc/qcom/memshare/Kconfig"
 
 endif # ARCH_MSM
