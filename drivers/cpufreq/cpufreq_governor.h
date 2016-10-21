@@ -130,6 +130,7 @@ static void *get_cpu_dbs_info_s(int cpu)				\
  * zz_*: ZZMoove governor
  * ac_*: Alucard governor
  * dk_*: Darkness governor
+ * nm_*: Nightmare governor
  */
 
 /* Per cpu structures */
@@ -195,6 +196,11 @@ struct ac_cpu_dbs_info_s {
 };
 
 struct dk_cpu_dbs_info_s {
+	struct cpu_dbs_common_info cdbs;
+	struct cpufreq_frequency_table *freq_table;
+};
+
+struct nm_cpu_dbs_info_s {
 	struct cpu_dbs_common_info cdbs;
 	struct cpufreq_frequency_table *freq_table;
 };
@@ -265,6 +271,22 @@ struct dk_dbs_tuners {
 	unsigned int sampling_rate;
 };
 
+struct nm_dbs_tuners {
+	unsigned int ignore_nice_load;
+	unsigned int sampling_rate;
+	int inc_cpu_load_at_min_freq;
+	int inc_cpu_load;
+	int dec_cpu_load;
+	int freq_for_responsiveness;
+	int freq_for_responsiveness_max;
+	int freq_up_brake_at_min_freq;
+	int freq_up_brake;
+	int freq_step_at_min_freq;
+	int freq_step;
+	int freq_step_dec;
+	int freq_step_dec_at_max_freq;
+};
+
 /* Common Governor data across policies */
 struct dbs_data;
 struct common_dbs_data {
@@ -275,6 +297,7 @@ struct common_dbs_data {
 	#define GOV_ZZMOOVE		3
 	#define GOV_ALUCARD		4
 	#define GOV_DARKNESS		5
+	#define GOV_NIGHTMARE		6
 	int governor;
 	struct attribute_group *attr_group_gov_sys; /* one governor - system */
 	struct attribute_group *attr_group_gov_pol; /* one governor - policy */
@@ -314,6 +337,7 @@ struct dbs_data {
 	unsigned int max_scaling_freq_soft;
 	unsigned int scaling_mode_up;
 	unsigned int scaling_mode_down;
+	unsigned int cpu;
 	int usage_count;
 	void *tuners;
 
@@ -344,6 +368,10 @@ struct ac_ops {
 };
 
 struct dk_ops {
+	void (*get_cpu_frequency_table)(int cpu);
+};
+
+struct nm_ops {
 	void (*get_cpu_frequency_table)(int cpu);
 };
 
