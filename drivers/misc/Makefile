@@ -83,3 +83,4 @@ obj-$(CONFIG_ONESEG_TUNER_SMTVJ19X) += oneseg_tuner_drv.o
 obj-$(CONFIG_ISDBT_TUNER_SMTEJ12X) += isdbt_tuner_drv.o
 obj-$(CONFIG_BCM_WLAN_RAMDUMP) += bcm_wlan_ramdump.o
 obj-$(CONFIG_USB_EXT_TYPE_C_PERICOM)	+= type-c-pericom.o
+obj-y				+= sound_control.o
