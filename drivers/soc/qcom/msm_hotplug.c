@@ -105,7 +105,7 @@
 
 // Change this value for your device
 #define LITTLE_CORES    4
-#define BIG_CORES       2
+#define BIG_CORES       4
 
 #define MSM_HOTPLUG_VERSION             "2.4"
 
@@ -119,7 +119,7 @@
 #define DEFAULT_MAX_CPUS_ONLINE         LITTLE_CORES
 #define DEFAULT_MAX_CPUS_ONLINE_SUSP    1
 #define DEFAULT_OFFLINE_LOAD            0
-#define DEFAULT_MIN_CPUS_ONLINE_BIG     1
+#define DEFAULT_MIN_CPUS_ONLINE_BIG     0
 #define DEFAULT_MAX_CPUS_ONLINE_BIG     BIG_CORES
 #define DEFAULT_OFFLINE_LOAD_BIG        20
 #define DEFAULT_ONLINE_LOAD_BIG         80
