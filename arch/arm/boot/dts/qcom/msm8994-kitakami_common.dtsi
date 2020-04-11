@@ -128,8 +128,8 @@
 			 <&clock_gcc clk_gcc_blsp1_qup4_i2c_apps_clk>;
 
 		pinctrl-names = "i2c_active", "i2c_sleep";
-		pinctrl-0 = <&msm_gpio_19_act &msm_gpio_20_act>;
-		pinctrl-1 = <&msm_gpio_19_sus &msm_gpio_20_sus>;
+		pinctrl-0 = <&msm_gpio_21_act &msm_gpio_22_act>;
+		pinctrl-1 = <&msm_gpio_21_sus &msm_gpio_22_sus>;
 		qcom,noise-rjct-scl = <0>;
 		qcom,noise-rjct-sda = <0>;
 		qcom,bam-pipe-idx-cons = <18>;
@@ -1416,95 +1416,95 @@
 		};
 	};
 
-	/* GPIO_19: CCI_I2C_SDA1 */
-	msm_gpio_19_active {
+	/* GPIO_19 */
+	msm_gpio_19 {
 		qcom,pins = <&gp 19>;
 		qcom,num-grp-pins = <1>;
-		label = "msm_gpio_19_active";
-		qcom,pin-func = <1>;
-		msm_gpio_19_act: active {
-			drive-strength = <2>;
-			bias-disable;
-		};
-	};
-	msm_gpio_19_suspend {
-		qcom,pins = <&gp 19>;
-		qcom,num-grp-pins = <1>;
-		label = "msm_gpio_19_suspend";
+		label = "msm_gpio_19";
 		qcom,pin-func = <0>;
-		msm_gpio_19_sus: suspend {
-			drive-strength = <2>;
-			bias-pull-down;
-			input-enable;
-		};
-	};
-	msm_gpio_19_default {
-		qcom,pins = <&gp 19>;
-		qcom,num-grp-pins = <1>;
-		label = "msm_gpio_19_default";
-		qcom,pin-func = <1>;
 		msm_gpio_19_def: default {
 			drive-strength = <2>;
 			bias-disable;
+			output-low;
 		};
 	};
 
-	/* GPIO_20: CCI_I2C_SCL1 */
-	msm_gpio_20_active {
+	/* GPIO_20 */
+	msm_gpio_20 {
 		qcom,pins = <&gp 20>;
 		qcom,num-grp-pins = <1>;
-		label = "msm_gpio_20_active";
+		label = "msm_gpio_20";
+		qcom,pin-func = <0>;
+		msm_gpio_20_def: default {
+			drive-strength = <2>;
+			bias-disable;
+			output-low;
+		};
+	};
+
+	/* GPIO_21 */
+	msm_gpio_21_active {
+		qcom,pins = <&gp 21>;
+		qcom,num-grp-pins = <1>;
+		label = "msm_gpio_21_active";
 		qcom,pin-func = <1>;
-		msm_gpio_20_act: active {
+		msm_gpio_21_act: active {
 			drive-strength = <2>;
 			bias-disable;
 		};
 	};
-	msm_gpio_20_suspend {
-		qcom,pins = <&gp 20>;
+	msm_gpio_21_suspend {
+		qcom,pins = <&gp 21>;
 		qcom,num-grp-pins = <1>;
-		label = "msm_gpio_20_suspend";
+		label = "msm_gpio_21_suspend";
 		qcom,pin-func = <0>;
-		msm_gpio_20_sus: suspend {
+		msm_gpio_21_sus: suspend {
 			drive-strength = <2>;
 			bias-pull-down;
 			input-enable;
 		};
 	};
-	msm_gpio_20_default {
-		qcom,pins = <&gp 20>;
-		qcom,num-grp-pins = <1>;
-		label = "msm_gpio_20_default";
-		qcom,pin-func = <1>;
-		msm_gpio_20_def: default {
-			drive-strength = <2>;
-			bias-disable;
-		};
-	};
-
-	/* GPIO_21: NC */
-	msm_gpio_21 {
+	msm_gpio_21_default {
 		qcom,pins = <&gp 21>;
 		qcom,num-grp-pins = <1>;
-		label = "msm_gpio_21";
-		qcom,pin-func = <0>;
+		label = "msm_gpio_21_default";
+		qcom,pin-func = <1>;
 		msm_gpio_21_def: default {
 			drive-strength = <2>;
 			bias-disable;
-			output-low;
 		};
 	};
 
-	/* GPIO_22: NC */
-	msm_gpio_22 {
+	/* GPIO_22 */
+	msm_gpio_22_active {
 		qcom,pins = <&gp 22>;
 		qcom,num-grp-pins = <1>;
-		label = "msm_gpio_22";
+		label = "msm_gpio_22_active";
+		qcom,pin-func = <1>;
+		msm_gpio_22_act: active {
+			drive-strength = <2>;
+			bias-disable;
+		};
+	};
+	msm_gpio_22_suspend {
+		qcom,pins = <&gp 22>;
+		qcom,num-grp-pins = <1>;
+		label = "msm_gpio_22_suspend";
 		qcom,pin-func = <0>;
+		msm_gpio_22_sus: suspend {
+			drive-strength = <2>;
+			bias-pull-down;
+			input-enable;
+		};
+	};
+	msm_gpio_22_default {
+		qcom,pins = <&gp 22>;
+		qcom,num-grp-pins = <1>;
+		label = "msm_gpio_22_default";
+		qcom,pin-func = <1>;
 		msm_gpio_22_def: default {
 			drive-strength = <2>;
 			bias-disable;
-			output-low;
 		};
 	};
 
