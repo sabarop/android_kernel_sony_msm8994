@@ -165,6 +165,7 @@ struct g_tuner_device {
 	u32 irq_flag;
 	wait_queue_head_t irq_wait_q;
 	int irq_num;
+	unsigned int gpios[ARRAY_SIZE(gpio_rsrcs)];
 } tnr_dev;
 
 static enum gpio_id req_ids[] = {
@@ -209,11 +210,15 @@ static int tunerpm_dev_init(struct platform_device *pdev,
 
 	for (i = 0; i < ARRAY_SIZE(gpio_rsrcs); i++) {
 		gpio = of_get_gpio_flags(of_node, i, &flags);
+
+		pr_err("%s,%d\n", __func__, gpio);
+
 		if (!gpio_is_valid(gpio)) {
 			ret = -EINVAL;
 			goto error_gpio;
 		}
 		drvdata->gpios[i] = gpio;
+		tnr_dev.gpios[i] = gpio;
 	}
 
 	for (i = 0; i < ARRAY_SIZE(req_ids); i++) {
@@ -246,6 +251,8 @@ static void tunerpm_dev_finalize(struct tuner_drvdata *drvdata)
 
 static int tuner_drv_ctl_power(struct tuner_drvdata *drvdata, int data)
 {
+	pr_err("%s,data=%d\n", __func__, data);
+
 	switch (data) {
 	case TUNER_DRV_CTL_POWON:
 		mutex_lock(&drvdata->mutex_lock);
@@ -283,6 +290,8 @@ static int tuner_drv_ctl_power(struct tuner_drvdata *drvdata, int data)
 
 static int tuner_drv_ant_switch(struct tuner_drvdata *drvdata, int ant_mode)
 {
+	pr_err("%s,ant_mode=%d\n", __func__, ant_mode);
+
 	switch (ant_mode) {
 	case ANTMODE_EARPHONE:
 		isdbt_tunerpm_ant_switch_control(drvdata,
@@ -305,6 +314,8 @@ static int tuner_drv_ant_switch(struct tuner_drvdata *drvdata, int ant_mode)
 
 irqreturn_t tuner_interrupt(int irq, void *dev_id)
 {
+	pr_err("%s\n", __func__);
+
 	if (tnr_dev.irq_flag == TUNER_DRV_IRQ_NOT_DETECTED) {
 		tnr_dev.irq_flag = TUNER_DRV_IRQ_DETECTED;
 		wake_up_interruptible(&tnr_dev.irq_wait_q);
@@ -315,6 +326,8 @@ irqreturn_t tuner_interrupt(int irq, void *dev_id)
 static int tuner_drv_set_interrupt(int int_num)
 {
 	int ret;
+
+	pr_err("%s\n", __func__);
 
 	tnr_dev.irq_num = gpio_to_irq(int_num);
 	ret = request_threaded_irq(tnr_dev.irq_num, tuner_interrupt,
@@ -328,6 +341,7 @@ static int tuner_drv_set_interrupt(int int_num)
 
 static void tuner_drv_release_interrupt(void)
 {
+	pr_err("%s\n", __func__);
 	free_irq(tnr_dev.irq_num, NULL);
 }
 
@@ -338,21 +352,27 @@ static ssize_t tuner_module_power_ctrl(struct device *dev,
 	unsigned long value;
 	int ret;
 
+	pr_err("%s\n", __func__);
+
 	if (kstrtoul(buf, 0, &value))
 		return -EINVAL;
 
 	if (!value) {
 		ret = tuner_drv_ctl_power(drvdata, TUNER_DRV_CTL_POWON);
+		pr_err("%s:POWON value=%d, ret=%d\n", __func__, value, ret);
 		if (ret)
 			return -EINVAL;
 		ret = tuner_drv_ctl_power(drvdata, TUNER_DRV_CTL_RESET);
+		pr_err("%s:RESET value=%d, ret=%d\n", __func__, value, ret);
 		if (ret) {
 			tuner_drv_ctl_power(drvdata, TUNER_DRV_CTL_POWOFF);
 			return -EINVAL;
 		}
 	} else {
+		pr_err("%s:POWOFF value=%d, ret=%d\n", __func__, value, ret);
 		tuner_drv_ctl_power(drvdata, TUNER_DRV_CTL_POWOFF);
 	}
+	pr_err("%s count=%zu\n", __func__, count);
 	return count;
 }
 
@@ -362,6 +382,8 @@ static ssize_t tuner_module_ant_ctrl(struct device *dev,
 	struct tuner_drvdata *drvdata = dev_get_drvdata(dev);
 	unsigned long value;
 	int ret;
+
+	pr_err("%s\n", __func__);
 
 	if (kstrtoul(buf, 0, &value))
 		return -EINVAL;
@@ -378,6 +400,8 @@ static ssize_t tuner_module_irq_ctrl(struct device *dev,
 {
 	unsigned long value;
 	struct tuner_drvdata *drvdata = dev_get_drvdata(dev);
+
+	pr_err("%s\n", __func__);
 
 	if (kstrtoul(buf, 0, &value))
 		return -EINVAL;
@@ -396,6 +420,8 @@ static ssize_t tuner_module_irq_ctrl(struct device *dev,
 static ssize_t tuner_module_irq_detect_read(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
+	pr_err("%s\n", __func__);
+
 	wait_event_interruptible(tnr_dev.irq_wait_q,
 		(tnr_dev.irq_flag == TUNER_DRV_IRQ_DETECTED));
 	return snprintf(buf, 1, "%d", tnr_dev.irq_flag);
@@ -404,12 +430,16 @@ static ssize_t tuner_module_irq_detect_read(struct device *dev,
 static ssize_t tuner_module_irq_detect_write(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
+	pr_err("%s\n", __func__);
+
 	tnr_dev.irq_flag = TUNER_DRV_IRQ_NOT_DETECTED;
 	return count;
 }
 
 static int tuner_module_entry_open(struct inode *inode, struct file *file)
 {
+	pr_err("%s\n", __func__);
+
 	if (tnr_dev.open_cnt > 0)
 		return -EBUSY;
 	else
@@ -423,6 +453,8 @@ static int tuner_module_entry_open(struct inode *inode, struct file *file)
 static int tuner_module_entry_close(struct inode *inode, struct file *file)
 {
 	struct devone_data *dev;
+
+	pr_err("%s\n", __func__);
 
 	if (tnr_dev.open_cnt <= 0)
 		return -ESRCH;
@@ -459,22 +491,28 @@ static int tuner_probe(struct platform_device *pdev)
 	struct device *dev = NULL;
 	struct tuner_drvdata *drvdata;
 
+pr_err("ej12x: tuner_probe start\n");
+
 	tnr_dev.mmtuner_device = platform_device_alloc(
 		D_TUNER_CONFIG_CLASS_NAME, -1);
 
 	if (!tnr_dev.mmtuner_device) {
 		ret = -ENOMEM;
+pr_err("ej12x: err_platform_device_alloc\n");
 		goto err_platform_device_alloc;
 	}
 
 	ret = platform_device_add(tnr_dev.mmtuner_device);
-	if (ret)
+	if (ret) {
+pr_err("ej12x: err_platform_device_add\n");
 		goto err_platform_device_add;
+}
 
 	tnr_dev.device_class = class_create(THIS_MODULE,
 		D_TUNER_CONFIG_CLASS_NAME);
 	if (IS_ERR(tnr_dev.device_class)) {
 		ret = PTR_ERR(tnr_dev.device_class);
+pr_err("ej12x: err_class_create\n");
 		goto err_class_create;
 	}
 
@@ -484,12 +522,14 @@ static int tuner_probe(struct platform_device *pdev)
 
 	if (IS_ERR(dev)) {
 		ret = PTR_ERR(dev);
+pr_err("ej12x: err_device_create\n");
 		goto err_device_create;
 	}
 
 	drvdata = kzalloc(sizeof(struct tuner_drvdata), GFP_KERNEL);
 	if (!drvdata) {
 		ret = -ENOMEM;
+pr_err("ej12x: err_alloc_data\n");
 		goto err_alloc_data;
 	}
 
@@ -498,31 +538,43 @@ static int tuner_probe(struct platform_device *pdev)
 	drvdata->sysfs_dev.init_name = D_TUNER_CONFIG_SYSFS_DEV_NAME;
 	dev_set_drvdata(&drvdata->sysfs_dev, drvdata);
 	ret = device_register(&drvdata->sysfs_dev);
-	if (ret)
+	if (ret) {
+pr_err("ej12x: err_set_dev\n");
 		goto err_set_dev;
+}
 
 	ret = register_chrdev(D_TUNER_CONFIG_DRV_MAJOR,
 		D_TUNER_CONFIG_DRIVER_NAME, &tuner_file_operations);
-	if (ret < 0)
+	if (ret < 0) {
+pr_err("ej12x: err_register_device\n");
 		goto err_register_device;
+}
 
 	drvdata->adap = i2c_get_adapter(D_TUNER_I2C_ADAPTER_ID);
-	if (!drvdata->adap)
+	if (!drvdata->adap) {
+pr_err("ej12x: err_i2c_get_adapter\n");
 		goto err_i2c_get_adapter;
+}
 
 	ret = tunerpm_dev_init(pdev, drvdata);
-	if (ret)
+	if (ret) {
+pr_err("ej12x: err_gpio_init\n");
 		goto err_gpio_init;
+}
 
 	tnr_dev.open_cnt = 0;
+
+pr_err("ej12x: sysfs_create_start\n");
 
 	for (i = 0; i < ARRAY_SIZE(tuner_sysfs_attrs); i++) {
 		ret = device_create_file(&drvdata->sysfs_dev,
 			&tuner_sysfs_attrs[i]);
+                pr_err("ej12x: sysfs_ret (%d).\n", ret);
 		if (ret) {
 			for (; i >= 0; --i)
 				device_remove_file(&drvdata->sysfs_dev,
 					&tuner_sysfs_attrs[i]);
+pr_err("ej12x: err_create_file\n");
 			goto err_create_file;
 		}
 	}
@@ -532,11 +584,14 @@ static int tuner_probe(struct platform_device *pdev)
 
 #ifdef CONFIG_ISDBT_TUNER_SMTEJ11X
 	ret = tuner_drv_ctl_power(drvdata, TUNER_DRV_CTL_POWON);
-	if (ret)
+	if (ret) {
+pr_err("ej12x: err_check_power 1\n");
 		goto err_check_power;
+}
 	ret = tuner_drv_ctl_power(drvdata, TUNER_DRV_CTL_RESET);
 	if (ret) {
 		tuner_drv_ctl_power(drvdata, TUNER_DRV_CTL_POWOFF);
+pr_err("ej12x: err_check_power 2\n");
 		goto err_check_power;
 	}
 	usleep_range(D_TUNER_POWER_CHECK_WAIT_US,
@@ -544,9 +599,10 @@ static int tuner_probe(struct platform_device *pdev)
 	tuner_drv_ctl_power(drvdata, TUNER_DRV_CTL_POWOFF);
 #endif
 
-	if (tuner_drv_set_interrupt(drvdata->gpios[TUNER_INT_PIN]))
+	if (tuner_drv_set_interrupt(drvdata->gpios[TUNER_INT_PIN])) {
+pr_err("ej12x: err_irq_set\n");
 		goto err_irq_set;
-
+}
 	return 0;
 
 err_irq_set:
@@ -580,6 +636,8 @@ static int tuner_remove(struct platform_device *pdev)
 {
 	struct tuner_drvdata *drvdata = dev_get_drvdata(&pdev->dev);
 
+	pr_err("%s\n", __func__);
+
 	tunerpm_dev_finalize(drvdata);
 	tuner_drv_release_interrupt();
 	i2c_put_adapter(drvdata->adap);
@@ -591,6 +649,8 @@ static int tuner_remove(struct platform_device *pdev)
 
 static void tuner_shutdown(struct platform_device *pdev)
 {
+	pr_err("%s\n", __func__);
+
 	device_destroy(tnr_dev.device_class, MKDEV(D_TUNER_CONFIG_DRV_MAJOR,
 		D_TUNER_CONFIG_DRV_MINOR));
 	class_destroy(tnr_dev.device_class);
@@ -615,15 +675,16 @@ static struct platform_driver mmtuner_driver = {
 		.name = D_TUNER_CONFIG_PLATFORM_DRIVER_NAME,
 		.owner = THIS_MODULE,
 #ifdef CONFIG_ISDBT_TUNER_SMTEJ11X
-		.of_match_table = ej113_match_table,
+		.of_match_table = of_match_ptr(ej113_match_table),
 #else
-		.of_match_table = ej121_match_table,
+		.of_match_table = of_match_ptr(ej121_match_table),
 #endif
 	},
 };
 
 static int __init tuner_drv_start(void)
 {
+pr_err("ej12x: tuner_drv_start\n");
 	return platform_driver_register(&mmtuner_driver);
 }
 
