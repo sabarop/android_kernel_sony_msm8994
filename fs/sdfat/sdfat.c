@@ -346,6 +346,7 @@ static int sdfat_d_hashi(const struct dentry *dentry, struct qstr *qstr)
 	return __sdfat_d_hashi(dentry, qstr);
 }
 
+#else /* LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 0) */
 //instead of sdfat_readdir
 static int sdfat_iterate(struct file *filp, struct dir_context *ctx)
 {
@@ -449,7 +450,6 @@ out_unlocked:
 	sdfat_free_namebuf(nb);
 	return err;
 }
-#else /* LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 0) */
 static inline sector_t __sdfat_bio_sector(struct bio *bio)
 {
 	return bio->bi_sector;
@@ -2389,9 +2389,9 @@ static int __sdfat_file_fsync(struct file *filp, loff_t start, loff_t end, int d
 static const struct file_operations sdfat_dir_operations = {
 	.llseek     = generic_file_llseek,
 	.read       = generic_read_dir,
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
 	.iterate    = sdfat_iterate,
-#else /* LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 0) */
+#else /* LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 0) */
 	.readdir    = sdfat_readdir,
 #endif
 	.fsync      = sdfat_file_fsync,
