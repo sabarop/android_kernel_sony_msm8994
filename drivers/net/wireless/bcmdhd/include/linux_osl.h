@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: linux_osl.h 614089 2016-01-21 02:43:09Z $
+ * $Id: linux_osl.h 676007 2016-12-20 02:31:31Z $
  */
 
 #ifndef _linux_osl_h_
@@ -243,7 +243,7 @@ extern int osl_error(int bcmerror);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 4, 29)
 #define OSL_SYSUPTIME()		((uint32)jiffies_to_msecs(jiffies))
 #else
-#define OSL_SYSUPTIME()		((uint32)jiffies * (1000 / HZ))
+#define OSL_SYSUPTIME()		((uint32)jiffies * msecs_to_jiffies(1))
 #endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(2, 4, 29) */
 #define	printf(fmt, args...)	printk(fmt , ## args)
 #include <linux/kernel.h>	/* for vsn/printf's */

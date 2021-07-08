@@ -2,7 +2,7 @@
  * Broadcom Dongle Host Driver (DHD), Linux-specific network interface
  * Basically selected code segments from usb-cdc.c and usb-rndis.c
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  * Copyright (C) 2014 Sony Mobile Communications Inc.
  * 
  *      Unless you and Broadcom execute a separate written software license
@@ -3594,6 +3594,10 @@ dhd_attach(osl_t *osh, struct dhd_bus *bus, uint bus_hdrlen)
 #ifdef GET_CUSTOM_MAC_ENABLE
 	wifi_platform_get_mac_addr(dhd->adapter, dhd->pub.mac.octet);
 #endif /* GET_CUSTOM_MAC_ENABLE */
+#ifdef CUSTOM_FORCE_NODFS_FLAG
+	dhd->pub.dhd_cflags |= WLAN_PLAT_NODFS_FLAG;
+	dhd->pub.force_country_change = TRUE;
+#endif
 #ifdef CUSTOM_COUNTRY_CODE
 	cloc_ptr = wifi_platform_get_country_code(dhd->adapter, dhd->pub.dhd_cspec.ccode);
 	if (cloc_ptr) {
@@ -4784,7 +4788,11 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 #ifdef WLAIBSS
 	setbit(eventmask, WLC_E_AIBSS_TXFAIL);
 #endif /* WLAIBSS */
+#ifdef SHOW_LOGTRACE
 	setbit(eventmask, WLC_E_TRACE);
+#else
+	clrbit(eventmask, WLC_E_TRACE);
+#endif /* SHOW_LOGTRACE */
 #ifdef DHD_LOSSLESS_ROAMING
 	setbit(eventmask, WLC_E_ROAM_PREP);
 #endif /* DHD_LOSSLESS_ROAMING */
@@ -5861,7 +5869,7 @@ dhd_os_ioctl_resp_wait(dhd_pub_t *pub, uint *condition, bool *pending)
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27))
 	timeout = msecs_to_jiffies(dhd_ioctl_timeout_msec);
 #else
-	timeout = dhd_ioctl_timeout_msec * HZ / 1000;
+	timeout = dhd_ioctl_timeout_msec * msecs_to_jiffies(1);
 #endif
 
 	timeout = wait_event_timeout(dhd->ioctl_resp_wait, (*condition), timeout);
@@ -6233,7 +6241,7 @@ void dhd_wait_for_event(dhd_pub_t *dhd, bool *lockvar)
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27))
 	int timeout = msecs_to_jiffies(IOCTL_RESP_TIMEOUT);
 #else
-	int timeout = (IOCTL_RESP_TIMEOUT / 1000) * HZ;
+	int timeout = IOCTL_RESP_TIMEOUT * msecs_to_jiffies(1);
 #endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) */
 
 	dhd_os_sdunlock(dhd);
@@ -6552,6 +6560,21 @@ dhd_dev_get_feature_set_matrix(struct net_device *dev, int *num)
 
 	return ret;
 }
+
+#ifdef CUSTOM_FORCE_NODFS_FLAG
+int
+dhd_dev_set_nodfs(struct net_device *dev, u32 nodfs)
+{
+	dhd_info_t *dhd = *(dhd_info_t **)netdev_priv(dev);
+
+	if (nodfs)
+		dhd->pub.dhd_cflags |= WLAN_PLAT_NODFS_FLAG;
+	else
+		dhd->pub.dhd_cflags &= ~WLAN_PLAT_NODFS_FLAG;
+	dhd->pub.force_country_change = TRUE;
+	return 0;
+}
+#endif /* CUSTOM_FORCE_NODFS_FLAG */
 
 #ifdef PNO_SUPPORT
 /* Linux wrapper to call common dhd_pno_stop_for_ssid */
@@ -7270,7 +7293,12 @@ void dhd_get_customized_country_code(struct net_device *dev, char *country_iso_c
 	wl_country_t *cspec)
 {
 	dhd_info_t *dhd = *(dhd_info_t **)netdev_priv(dev);
+#ifdef CUSTOM_FORCE_NODFS_FLAG
+	get_customized_country_code(dhd->adapter, country_iso_code, cspec,
+					dhd->pub.dhd_cflags);
+#else
 	get_customized_country_code(dhd->adapter, country_iso_code, cspec);
+#endif /* CUSTOM_FORCE_NODFS_FLAG */
 }
 void dhd_bus_country_set(struct net_device *dev, wl_country_t *cspec, bool notify)
 {

@@ -1,7 +1,7 @@
 /*
  * Linux cfg80211 Vendor Extension Code
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -212,6 +212,27 @@ wl_cfgvendor_set_rand_mac_oui(struct wiphy *wiphy,
 
 	return err;
 }
+
+#ifdef CUSTOM_FORCE_NODFS_FLAG
+static int
+wl_cfgvendor_set_nodfs_flag(struct wiphy *wiphy,
+	struct wireless_dev *wdev, const void *data, int len)
+{
+	int err = 0;
+	struct bcm_cfg80211 *cfg = wiphy_priv(wiphy);
+	int type;
+	u32 nodfs;
+
+	type = nla_type(data);
+	if (type == ANDR_WIFI_ATTRIBUTE_NODFS_SET) {
+		nodfs = nla_get_u32(data);
+		err = dhd_dev_set_nodfs(bcmcfg_to_prmry_ndev(cfg), nodfs);
+	} else {
+		err = -1;
+	}
+	return err;
+}
+#endif /* CUSTOM_FORCE_NODFS_FLAG */
 
 #ifdef GSCAN_SUPPORT
 int
@@ -1278,53 +1299,88 @@ wl_cfgvendor_set_bssid_blacklist(struct wiphy *wiphy,
 	int err = 0;
 	int type, tmp;
 	const struct nlattr *iter;
-	uint32 mem_needed = 0, flush = 0, i = 0, num = 0;
+	uint32 mem_needed = 0, flush = 0, num = 0;
 
 	/* Assumption: NUM attribute must come first */
 	nla_for_each_attr(iter, data, len, tmp) {
 		type = nla_type(iter);
 		switch (type) {
 			case GSCAN_ATTRIBUTE_NUM_BSSID:
+				if (num != 0) {
+					WL_ERR(("attempt to change BSSID num\n"));
+					err = -EINVAL;
+					goto exit;
+				}
+				if (nla_len(iter) != sizeof(uint32)) {
+					WL_ERR(("not matching nla_len.\n"));
+					err = -EINVAL;
+					goto exit;
+				}
 				num = nla_get_u32(iter);
-				if (num > MAX_BSSID_BLACKLIST_NUM) {
-					WL_ERR(("Too many Blacklist BSSIDs!\n"));
+				if (num == 0 || num > MAX_BSSID_BLACKLIST_NUM) {
+					WL_ERR(("wrong BSSID count:%d\n", num));
+					err = -EINVAL;
+					goto exit;
+				}
+				if (!blacklist) {
+					mem_needed = OFFSETOF(maclist_t, ea) +
+						sizeof(struct ether_addr) * (num);
+					blacklist = (maclist_t *)
+						kzalloc(mem_needed, GFP_KERNEL);
+					if (!blacklist) {
+						WL_ERR(("kzalloc failed.\n"));
+						err = -ENOMEM;
+						goto exit;
+					}
+				}
+				break;
+			case GSCAN_ATTRIBUTE_BSSID_BLACKLIST_FLUSH:
+				if (nla_len(iter) != sizeof(uint32)) {
+					WL_ERR(("not matching nla_len.\n"));
+					err = -EINVAL;
+					goto exit;
+				}
+				flush = nla_get_u32(iter);
+				if (flush != 1) {
+					WL_ERR(("flush arg is worng:%d\n", flush));
 					err = -EINVAL;
 					goto exit;
 				}
 				break;
-			case GSCAN_ATTRIBUTE_BSSID_BLACKLIST_FLUSH:
-				flush = nla_get_u32(iter);
-				break;
 			case GSCAN_ATTRIBUTE_BLACKLIST_BSSID:
-				if (num) {
-					if (!blacklist) {
-						mem_needed = sizeof(maclist_t) +
-						     sizeof(struct ether_addr) * (num - 1);
-						blacklist = (maclist_t *)
-						      kmalloc(mem_needed, GFP_KERNEL);
-						if (!blacklist) {
-							WL_ERR(("%s: Can't malloc %d bytes\n",
-							     __FUNCTION__, mem_needed));
-							err = -ENOMEM;
-							goto exit;
-						}
-						blacklist->count = num;
-					}
-					if (i >= num) {
-						WL_ERR(("CFGs don't seem right!\n"));
-						err = -EINVAL;
-						goto exit;
-					}
-					memcpy(&(blacklist->ea[i]),
-					  nla_data(iter), ETHER_ADDR_LEN);
-					i++;
+				if (num == 0 || !blacklist) {
+					WL_ERR(("number of BSSIDs not received.\n"));
+					err = -EINVAL;
+					goto exit;
 				}
+				if (nla_len(iter) != ETHER_ADDR_LEN) {
+					WL_ERR(("not matching nla_len.\n"));
+					err = -EINVAL;
+					goto exit;
+				}
+				if (blacklist->count >= num) {
+					WL_ERR(("too many BSSIDs than expected:%d\n",
+						blacklist->count));
+					err = -EINVAL;
+					goto exit;
+				}
+				memcpy(&(blacklist->ea[blacklist->count]), nla_data(iter),
+						ETHER_ADDR_LEN);
+				blacklist->count++;
 				break;
-			default:
-				WL_ERR(("%s: No such attribute %d\n", __FUNCTION__, type));
-				break;
-			}
+		default:
+			WL_ERR(("No such attribute:%d\n", type));
+			break;
+		}
 	}
+
+	if (blacklist && (blacklist->count != num)) {
+		WL_ERR(("not matching bssid count:%d to expected:%d\n",
+				blacklist->count, num));
+		err = -EINVAL;
+		goto exit;
+	}
+
 	err = dhd_dev_set_blacklist_bssid(bcmcfg_to_prmry_ndev(cfg),
 	          blacklist, mem_needed, flush);
 exit:
@@ -1852,36 +1908,6 @@ static int wl_cfgvendor_stop_mkeep_alive(struct wiphy *wiphy, struct wireless_de
 }
 #endif /* defined(KEEP_ALIVE) */
 
-static int wl_cfgvendor_priv_string_handler(struct wiphy *wiphy,
-	struct wireless_dev *wdev, const void  *data, int len)
-{
-	struct bcm_cfg80211 *cfg = wiphy_priv(wiphy);
-	int err = 0;
-	int data_len = 0;
-
-	WL_INFO(("%s: Enter \n", __func__));
-
-	if (strncmp((char *)data, BRCM_VENDOR_SCMD_CAPA, strlen(BRCM_VENDOR_SCMD_CAPA)) == 0) {
-		err = wldev_iovar_getbuf(bcmcfg_to_prmry_ndev(cfg), "cap", NULL, 0,
-			cfg->ioctl_buf, WLC_IOCTL_MAXLEN, &cfg->ioctl_buf_sync);
-		if (unlikely(err)) {
-			WL_ERR(("error (%d)\n", err));
-			return err;
-		}
-		data_len = strlen(cfg->ioctl_buf);
-		cfg->ioctl_buf[data_len] = '\0';
-	}
-
-	err =  wl_cfgvendor_send_cmd_reply(wiphy, bcmcfg_to_prmry_ndev(cfg),
-		cfg->ioctl_buf, data_len+1);
-	if (unlikely(err))
-		WL_ERR(("Vendor Command reply failed ret:%d \n", err));
-	else
-		WL_INFO(("Vendor Command reply sent successfully!\n"));
-
-	return err;
-}
-
 #ifdef LINKSTAT_SUPPORT
 #define NUM_RATE 32
 #define NUM_PEER 1
@@ -2074,14 +2100,6 @@ static int wl_cfgvendor_set_country(struct wiphy *wiphy,
 }
 
 static const struct wiphy_vendor_command wl_vendor_cmds [] = {
-	{
-		{
-			.vendor_id = OUI_BRCM,
-			.subcmd = BRCM_VENDOR_SCMD_PRIV_STR
-		},
-		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
-		.doit = wl_cfgvendor_priv_string_handler
-	},
 #ifdef GSCAN_SUPPORT
 	{
 		{
@@ -2198,6 +2216,17 @@ static const struct wiphy_vendor_command wl_vendor_cmds [] = {
 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
 		.doit = wl_cfgvendor_set_rand_mac_oui
 	},
+#ifdef CUSTOM_FORCE_NODFS_FLAG
+	{
+		{
+			.vendor_id = OUI_GOOGLE,
+			.subcmd = ANDR_WIFI_NODFS_CHANNELS
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
+		.doit = wl_cfgvendor_set_nodfs_flag
+
+	},
+#endif /* CUSTOM_FORCE_NODFS_FLAG */
 #ifdef LINKSTAT_SUPPORT
 	{
 		{

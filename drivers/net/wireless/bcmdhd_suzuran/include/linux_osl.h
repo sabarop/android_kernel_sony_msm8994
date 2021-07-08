@@ -1,7 +1,7 @@
 /*
  * Linux OS Independent Layer
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -199,7 +199,7 @@ extern int osl_error(int bcmerror);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 4, 29)
 #define OSL_SYSUPTIME()		((uint32)jiffies_to_msecs(jiffies))
 #else
-#define OSL_SYSUPTIME()		((uint32)jiffies * (1000 / HZ))
+#define OSL_SYSUPTIME()		((uint32)jiffies * msecs_to_jiffies(1))
 #endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(2, 4, 29) */
 #define	printf(fmt, args...)	printk(fmt , ## args)
 #include <linux/kernel.h>	/* for vsn/printf's */

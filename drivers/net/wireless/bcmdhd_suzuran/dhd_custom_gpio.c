@@ -1,6 +1,6 @@
 /*
 * Customer code to add GPIO control during WLAN start/stop
-* Copyright (C) 1999-2017, Broadcom Corporation
+* Copyright (C) 1999-2018, Broadcom Corporation
 * Copyright (C) 2013 Sony Mobile Communications Inc.
 * 
 *      Unless you and Broadcom execute a separate written software license
@@ -35,7 +35,7 @@
 #include <wlioctl.h>
 #if defined(WL_WIRELESS_EXT)
 #include <wl_iw.h>
-#endif
+#endif 
 
 #define WL_ERROR(x) printf x
 #define WL_TRACE(x)
@@ -546,7 +546,12 @@ const struct cntry_locales_custom translate_custom_table[] = {
 *  input : ISO 3166-1 country abbreviation
 *  output: customized cspec
 */
+#ifdef CUSTOM_FORCE_NODFS_FLAG
+void get_customized_country_code(void *adapter, char *country_iso_code,
+					wl_country_t *cspec, u32 flags)
+#else
 void get_customized_country_code(void *adapter, char *country_iso_code, wl_country_t *cspec)
+#endif /* CUSTOM_FORCE_NODFS_FLAG */
 {
 #if 0 && (defined(CUSTOMER_HW2) && (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 39)))
 
@@ -555,7 +560,11 @@ void get_customized_country_code(void *adapter, char *country_iso_code, wl_count
 	if (!cspec)
 		return;
 
+#ifdef CUSTOM_FORCE_NODFS_FLAG
+	cloc_ptr = wifi_platform_get_country_code(adapter, country_iso_code, flags);
+#else
 	cloc_ptr = wifi_platform_get_country_code(adapter, country_iso_code);
+#endif /* CUSTOM_FORCE_NODFS_FLAG */
 	if (cloc_ptr) {
 		strlcpy(cspec->ccode, cloc_ptr->custom_locale, WLC_CNTRY_BUF_SZ);
 		cspec->rev = cloc_ptr->custom_locale_rev;

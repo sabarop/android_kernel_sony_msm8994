@@ -92,9 +92,6 @@ DHDCFLAGS += -DROAM_ENABLE
 DHDCFLAGS += -DENABLE_FW_ROAM_SUSPEND
 
 
-
-
-
 # SoftAP
 DHDCFLAGS += -DWL_SUPPORT_AUTO_CHANNEL -DSUPPORT_HIDDEN_AP
 DHDCFLAGS += -DDISABLE_11H_SOFTAP
@@ -211,8 +208,6 @@ DHDCFLAGS += -DWL_VENDOR_EXT_SUPPORT
 ANDROID_OFILES := wl_cfgvendor.o
 
 
-
-
 ##########################
 # driver type
 # m: module type driver
@@ -293,7 +288,7 @@ endif
   DHDCFLAGS += -DDISABLE_TXBFR
 ifeq ($(CONFIG_BCM4356),y)
   DHDCFLAGS += -DENABLE_INSMOD_NO_FW_LOAD
-#  DHDCFLAGS += -DUSE_LATE_INITCALL_SYNC
+  DHDCFLAGS += -DUSE_LATE_INITCALL_SYNC
 endif
 ifeq ($(BUS_IFACE_SDIO),y)
   DHDCFLAGS += -DCUSTOM_PSPRETEND_THR=30
@@ -340,8 +335,6 @@ ifeq ($(BUS_IFACE_PCIE),y)
   DHDCFLAGS += -DBCMPCIE_OOB_HOST_WAKE
 endif
 
-
-
 # New Features
   DHDCFLAGS += -DWL11U
   DHDCFLAGS += -DBCMCCX
@@ -354,7 +347,7 @@ endif
   DHDCFLAGS += -DSUPPORT_WL_TXPOWER
 ifeq ($(CONFIG_BCM4354),y)
   DHDCFLAGS += -DENABLE_INSMOD_NO_FW_LOAD
-# DHDCFLAGS += -DUSE_LATE_INITCALL_SYNC
+  DHDCFLAGS += -DUSE_LATE_INITCALL_SYNC
 endif
 
 ifeq ($(BUS_IFACE_SDIO),y)
@@ -405,6 +398,7 @@ endif
   DHDCFLAGS += -DDISABLE_WL_FRAMEBURST_SOFTAP
 endif
 endif
+
 #############################
 # Platform dependent feature
 #############################
@@ -447,6 +441,11 @@ ifneq ($(CONFIG_SOMC_WLAN_LOW_POWER_NV_PATH),)
 endif
 endif
 
+# Disable to delay link down event
+#ifeq ($(CONFIG_SOMC_WLAN_DISABLE_BCM_DLY),y)
+#  DHDCFLAGS += -DDISABLE_BCN_DLY
+#endif
+
 # Change scan time
 ifeq ($(CONFIG_SOMC_CFG_WLAN_CHANGE_SCAN_TIME),y)
   DHDCFLAGS += -DCHANGE_SCAN_TIME
@@ -461,10 +460,16 @@ endif
 ifneq ($(CONFIG_SOMC_WLAN_NVRAM_PATH),)
   DHDCFLAGS += -DCONFIG_BCMDHD_NVRAM_PATH=\"$(CONFIG_SOMC_WLAN_NVRAM_PATH)\"
 endif
+
+# Enable Disconnection timing log
+ifeq ($(CONFIG_SOMC_WLAN_ENABLE_DISC_TIME_LOG),y)
+  DHDCFLAGS += -DDHD_ENABLE_DISC_TIME_LOG
+endif
+
+
 #########
 # Others
 #########
-
 
 EXTRA_LDFLAGS += --strip-debug
 EXTRA_CFLAGS += $(DHDCFLAGS) -DDHD_DEBUG
@@ -527,6 +532,6 @@ endif
 DHDOFILES += $(ANDROID_OFILES)
 
 # Module information used by KBuild framework
-obj-$(CONFIG_BCMDHD) += $(MODNAME).o
+obj-$(CONFIG_BCMDHD_BCM4356) += $(MODNAME).o
 
 $(MODNAME)-objs := $(DHDOFILES)

@@ -742,11 +742,8 @@ dhdpcie_bus_release(dhd_bus_t *bus)
 		MFREE(osh, bus, sizeof(dhd_bus_t));
 
 	}
-
 	DHD_TRACE(("%s: Exit\n", __FUNCTION__));
-
 }
-
 
 void
 dhdpcie_bus_release_dongle(dhd_bus_t *bus, osl_t *osh, bool dongle_isolation, bool reset_flag)
@@ -2927,6 +2924,7 @@ dhd_bus_devreset(dhd_pub_t *dhdp, uint8 flag)
 			bus->dhd->up = FALSE;
 			if (bus->dhd->busstate != DHD_BUS_DOWN) {
 				if (bus->intr) {
+					dhdpcie_bus_intr_disable(bus);
 					dhdpcie_free_irq(bus);
 				}
 #ifdef BCMPCIE_OOB_HOST_WAKE

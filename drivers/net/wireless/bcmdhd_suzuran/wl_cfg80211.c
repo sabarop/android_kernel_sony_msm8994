@@ -1,7 +1,7 @@
 /*
  * Linux cfg80211 driver
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  * Copyright (C) 2015 Sony Mobile Communications Inc.
  * 
  *      Unless you and Broadcom execute a separate written software license
@@ -22,7 +22,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: wl_cfg80211.c 718508 2017-08-31 02:48:38Z $
+ * $Id: wl_cfg80211.c 751081 2018-03-09 08:06:41Z $
  */
 /* */
 #include <typedefs.h>
@@ -378,8 +378,9 @@ static s32 wl_cfg80211_resume(struct wiphy *wiphy);
 	2, 0))
 static s32 wl_cfg80211_mgmt_tx_cancel_wait(struct wiphy *wiphy,
 	bcm_struct_cfgdev *cfgdev, u64 cookie);
-static s32 wl_cfg80211_del_station(struct wiphy *wiphy,
-	struct net_device *ndev, u8* mac_addr);
+static s32 wl_cfg80211_del_station(
+		struct wiphy *wiphy, struct net_device *ndev,
+		struct station_del_parameters *params);
 static s32 wl_cfg80211_change_station(struct wiphy *wiphy,
 	struct net_device *dev, u8 *mac, struct station_parameters *params);
 #endif /* WL_SUPPORT_BACKPORTED_KPATCHES || KERNEL_VER >= KERNEL_VERSION(3, 2, 0)) */
@@ -5593,7 +5594,7 @@ wl_cfg80211_mgmt_tx(struct wiphy *wiphy, bcm_struct_cfgdev *cfgdev,
 
 	WL_DBG(("Enter \n"));
 
-	if (len > ACTION_FRAME_SIZE) {
+	if (len > (ACTION_FRAME_SIZE + DOT11_MGMT_HDR_LEN)) {
 		WL_ERR(("bad length:%zu\n", len));
 		return BCME_BADLEN;
 	}
@@ -5634,7 +5635,7 @@ wl_cfg80211_mgmt_tx(struct wiphy *wiphy, bcm_struct_cfgdev *cfgdev,
 			s32 ie_len = len - ie_offset;
 			if ((dev == bcmcfg_to_prmry_ndev(cfg)) && cfg->p2p)
 				bssidx = wl_to_p2p_bss_bssidx(cfg, P2PAPI_BSSCFG_DEVICE);
-				wl_cfgp2p_set_management_ie(cfg, dev, bssidx,
+			wl_cfgp2p_set_management_ie(cfg, dev, bssidx,
 				VNDR_IE_PRBRSP_FLAG, (u8 *)(buf + ie_offset), ie_len);
 			cfg80211_mgmt_tx_status(cfgdev, *cookie, buf, len, true, GFP_KERNEL);
 			goto exit;
@@ -6796,9 +6797,8 @@ static s32 wl_cfg80211_hostapd_sec(
 	2, 0))
 static s32
 wl_cfg80211_del_station(
-	struct wiphy *wiphy,
-	struct net_device *ndev,
-	u8* mac_addr)
+		struct wiphy *wiphy, struct net_device *ndev,
+		struct station_del_parameters *params)
 {
 	struct net_device *dev;
 	struct bcm_cfg80211 *cfg = wiphy_priv(wiphy);
@@ -6809,6 +6809,8 @@ wl_cfg80211_del_station(
 		sizeof(struct ether_addr) + sizeof(uint)] = {0};
 	struct maclist *assoc_maclist = (struct maclist *)mac_buf;
 	int num_associated = 0;
+
+	const u8 *mac_addr = params->mac;
 
 	WL_DBG(("Entry\n"));
 	if (mac_addr == NULL) {
@@ -8524,6 +8526,27 @@ static s32 wl_get_assoc_ies(struct bcm_cfg80211 *cfg, struct net_device *ndev)
 	assoc_info.req_len = htod32(assoc_info.req_len);
 	assoc_info.resp_len = htod32(assoc_info.resp_len);
 	assoc_info.flags = htod32(assoc_info.flags);
+
+	if (assoc_info.req_len > (MAX_REQ_LINE + sizeof(struct dot11_assoc_req) +
+		((assoc_info.flags & WLC_ASSOC_REQ_IS_REASSOC) ? ETHER_ADDR_LEN : 0))) {
+		err = BCME_BADLEN;
+		goto exit;
+	}
+	if ((assoc_info.req_len > 0) &&
+		(assoc_info.req_len < (sizeof(struct dot11_assoc_req) +
+		((assoc_info.flags & WLC_ASSOC_REQ_IS_REASSOC) ? ETHER_ADDR_LEN : 0)))) {
+		err = BCME_BADLEN;
+		goto exit;
+	}
+	if (assoc_info.resp_len > (MAX_REQ_LINE + sizeof(struct dot11_assoc_resp))) {
+		err = BCME_BADLEN;
+		goto exit;
+	}
+	if ((assoc_info.resp_len > 0) && (assoc_info.resp_len < sizeof(struct dot11_assoc_resp))) {
+		err = BCME_BADLEN;
+		goto exit;
+	}
+
 	if (conn_info->req_ie_len) {
 		conn_info->req_ie_len = 0;
 		bzero(conn_info->req_ie, sizeof(conn_info->req_ie));
@@ -8534,45 +8557,34 @@ static s32 wl_get_assoc_ies(struct bcm_cfg80211 *cfg, struct net_device *ndev)
 	}
 	if (assoc_info.req_len) {
 		err = wldev_iovar_getbuf(ndev, "assoc_req_ies", NULL, 0, cfg->extra_buf,
-			WL_ASSOC_INFO_MAX, NULL);
+			assoc_info.req_len, NULL);
 		if (unlikely(err)) {
 			WL_ERR(("could not get assoc req (%d)\n", err));
-			return err;
+			goto exit;
 		}
 		conn_info->req_ie_len = assoc_info.req_len - sizeof(struct dot11_assoc_req);
 		if (assoc_info.flags & WLC_ASSOC_REQ_IS_REASSOC) {
 			conn_info->req_ie_len -= ETHER_ADDR_LEN;
 		}
-		if (conn_info->req_ie_len <= MAX_REQ_LINE)
-			memcpy(conn_info->req_ie, cfg->extra_buf, conn_info->req_ie_len);
-		else {
-			WL_ERR(("IE size %d above max %d size \n",
-				conn_info->req_ie_len, MAX_REQ_LINE));
-			return err;
-		}
-	} else {
-		conn_info->req_ie_len = 0;
+		memcpy(conn_info->req_ie, cfg->extra_buf, conn_info->req_ie_len);
 	}
 	if (assoc_info.resp_len) {
 		err = wldev_iovar_getbuf(ndev, "assoc_resp_ies", NULL, 0, cfg->extra_buf,
-			WL_ASSOC_INFO_MAX, NULL);
+			assoc_info.resp_len, NULL);
 		if (unlikely(err)) {
 			WL_ERR(("could not get assoc resp (%d)\n", err));
-			return err;
+			goto exit;
 		}
-		conn_info->resp_ie_len = assoc_info.resp_len -sizeof(struct dot11_assoc_resp);
-		if (conn_info->resp_ie_len <= MAX_REQ_LINE)
-			memcpy(conn_info->resp_ie, cfg->extra_buf, conn_info->resp_ie_len);
-		else {
-			WL_ERR(("IE size %d above max %d size \n",
-				conn_info->resp_ie_len, MAX_REQ_LINE));
-			return err;
-		}
-	} else {
-		conn_info->resp_ie_len = 0;
+		conn_info->resp_ie_len = assoc_info.resp_len - sizeof(struct dot11_assoc_resp);
+		memcpy(conn_info->resp_ie, cfg->extra_buf, conn_info->resp_ie_len);
 	}
-	WL_DBG(("req len (%d) resp len (%d)\n", conn_info->req_ie_len,
-		conn_info->resp_ie_len));
+
+exit:
+	if (err) {
+		WL_ERR(("err:%d, assoc_info-req:%u,resp:%u conn_info-req:%u,resp:%u\n",
+			err, assoc_info.req_len, assoc_info.resp_len,
+			conn_info->req_ie_len, conn_info->resp_ie_len));
+	}
 
 	return err;
 }
@@ -9841,7 +9853,7 @@ wl_cfg80211_netdev_notifier_call(struct notifier_block * nb,
 			int max_wait_timeout = 2;
 			int max_wait_count = 100;
 			int refcnt = 0;
-			unsigned long limit = jiffies + max_wait_timeout * HZ;
+			unsigned long limit = jiffies + max_wait_timeout * msecs_to_jiffies(1000);
 			while (work_pending(&wdev->cleanup_work)) {
 				if (refcnt%5 == 0) {
 					WL_ERR(("[NETDEV_DOWN] wait for "
@@ -9863,7 +9875,7 @@ wl_cfg80211_netdev_notifier_call(struct notifier_block * nb,
 					break;
 				}
 				set_current_state(TASK_INTERRUPTIBLE);
-				schedule_timeout(100);
+				(void)schedule_timeout(HZ);
 				set_current_state(TASK_RUNNING);
 				refcnt++;
 			}
@@ -10232,16 +10244,7 @@ static s32 wl_escan_handler(struct bcm_cfg80211 *cfg, bcm_struct_cfgdev *cfgdev,
 		}
 		wl_escan_increment_sync_id(cfg, SCAN_BUF_NEXT);
 	}
-#ifdef GSCAN_SUPPORT
-	else if ((status == WLC_E_STATUS_ABORT) || (status == WLC_E_STATUS_NEWSCAN)) {
-		if (status == WLC_E_STATUS_NEWSCAN) {
-			WL_ERR(("WLC_E_STATUS_NEWSCAN : scan_request[%p]\n", cfg->scan_request));
-			WL_ERR(("sync_id[%d], bss_count[%d]\n", escan_result->sync_id,
-				escan_result->bss_count));
-		}
-#else
 	else if (status == WLC_E_STATUS_ABORT) {
-#endif /* GSCAN_SUPPORT */
 		cfg->escan_info.escan_state = WL_ESCAN_STATE_IDLE;
 		wl_escan_print_sync_id(status, escan_result->sync_id,
 			cfg->escan_info.cur_sync_id);
@@ -11211,6 +11214,13 @@ static int wl_construct_reginfo(struct bcm_cfg80211 *cfg, s32 bw_cap)
 #undef LOCAL_BUF_LEN
 
 	list = (wl_uint32_list_t *)(void *)pbuf;
+
+	if ((list) && (dtoh32(list->count) > htod32(WL_NUMCHANSPECS))) {
+		WL_ERR(("Invalid channel list : %d\n", dtoh32(list->count)));
+		kfree(pbuf);
+		return INVCHANSPEC;
+	}
+
 	band = array_size = n_2g = n_5g = 0;
 	for (i = 0; i < dtoh32(list->count); i++) {
 		index = 0;

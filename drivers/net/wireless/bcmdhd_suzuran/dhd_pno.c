@@ -2,7 +2,7 @@
  * Broadcom Dongle Host Driver (DHD)
  * Prefered Network Offload and Wi-Fi Location Service(WLS) code.
  *
- * Copyright (C) 1999-2017, Broadcom Corporation
+ * Copyright (C) 1999-2018, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -2607,6 +2607,12 @@ _dhd_pno_get_gscan_batch_from_fw(dhd_pub_t *dhd)
 	}
 
 	plbestnet = (wl_pfn_lscanresults_t *)MALLOC(dhd->osh, PNO_BESTNET_LEN);
+	if (!plbestnet) {
+		DHD_ERROR(("%s :Out of memory!! Cant malloc %d bytes\n", __FUNCTION__,
+		      PNO_BESTNET_LEN));
+		err = BCME_NOMEM;
+		goto exit;
+	}
 
 	mutex_lock(&_pno_state->pno_mutex);
 
