@@ -265,20 +265,6 @@ static int brcm_bt_drv_reset_queue(struct sk_buff_head *list)
 
 /*****************************************************************************
 **
-** Function - brcm_bt_drv_reset_queue
-**
-** Description - Performs a reset of BT packet queues.
-**
-*****************************************************************************/
-static int brcm_bt_drv_reset_queue(struct sk_buff_head *list)
-{
-    list->qlen = 0;
-    list->next = list;
-    list->prev = list;
-}
-
-/*****************************************************************************
-**
 ** Function - brcm_bt_drv_close
 **
 ** Description - Performs cleanup of BT protocol driver.
