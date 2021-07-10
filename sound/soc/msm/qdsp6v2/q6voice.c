@@ -22,6 +22,7 @@
 #include <linux/wait.h>
 #include <linux/mutex.h>
 #include <linux/msm_audio_ion.h>
+#include <linux/qpnp/qpnp-haptic.h>
 
 #include <soc/qcom/socinfo.h>
 #include <linux/qdsp6v2/apr_tal.h>
@@ -5240,6 +5241,8 @@ int voc_end_voice_call(uint32_t session_id)
 	if (common.ec_ref_ext)
 		voc_set_ext_ec_ref(AFE_PORT_INVALID, false);
 
+	qpnp_disable_haptics(false);
+
 	mutex_unlock(&v->lock);
 	return ret;
 }
@@ -5559,6 +5562,8 @@ int voc_start_voice_call(uint32_t session_id)
 		ret = -EINVAL;
 		goto fail;
 	}
+
+	qpnp_disable_haptics(true);
 fail:
 	mutex_unlock(&v->lock);
 	return ret;
