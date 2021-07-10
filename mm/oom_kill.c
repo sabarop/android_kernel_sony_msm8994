@@ -534,7 +534,6 @@ void oom_kill_process(struct task_struct *p, gfp_t gfp_mask, int order,
 			  victim_rss,
 			  gfp_mask);
 
-	do_send_sig_info(SIGKILL, SEND_SIG_FORCED, victim, true);
 	put_task_struct(victim);
 }
 #undef K
@@ -721,3 +720,4 @@ void pagefault_out_of_memory(void)
 		clear_zonelist_oom(zonelist, GFP_KERNEL);
 	}
 }
+
