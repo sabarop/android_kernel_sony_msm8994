@@ -33,14 +33,12 @@
 
 #include <linux/log2.h>
 
-static int pcpu_populate_chunk(struct pcpu_chunk *chunk,
-			       int page_start, int page_end)
+static int pcpu_populate_chunk(struct pcpu_chunk *chunk, int off, int size)
 {
 	return 0;
 }
 
-static void pcpu_depopulate_chunk(struct pcpu_chunk *chunk,
-				  int page_start, int page_end)
+static void pcpu_depopulate_chunk(struct pcpu_chunk *chunk, int off, int size)
 {
 	/* nada */
 }
