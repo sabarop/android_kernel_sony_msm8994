@@ -43,14 +43,31 @@
  */
 static void mpage_end_io(struct bio *bio, int err)
 {
-	struct bio_vec *bv;
-	int i;
+	const int uptodate = test_bit(BIO_UPTODATE, &bio->bi_flags);
+	struct bio_vec *bvec = bio->bi_io_vec + bio->bi_vcnt - 1;
 
-	bio_for_each_segment_all(bv, bio, i) {
-		struct page *page = bv->bv_page;
-		page_endio(page, bio_data_dir(bio), err);
-	}
+	do {
+		struct page *page = bvec->bv_page;
 
+		if (--bvec >= bio->bi_io_vec)
+			prefetchw(&bvec->bv_page->flags);
+		if (bio_data_dir(bio) == READ) {
+			if (uptodate) {
+				SetPageUptodate(page);
+			} else {
+				ClearPageUptodate(page);
+				SetPageError(page);
+			}
+			unlock_page(page);
+		} else { /* bio_data_dir(bio) == WRITE */
+			if (!uptodate) {
+				SetPageError(page);
+				if (page->mapping)
+					set_bit(AS_EIO, &page->mapping->flags);
+			}
+			end_page_writeback(page);
+		}
+	} while (bvec >= bio->bi_io_vec);
 	bio_put(bio);
 }
 

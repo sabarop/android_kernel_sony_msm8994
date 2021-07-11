@@ -635,14 +635,16 @@ static const struct segment_allocation default_salloc_ops = {
 
 static void f2fs_end_io_write(struct bio *bio, int err)
 {
+	const int uptodate = test_bit(BIO_UPTODATE, &bio->bi_flags);
+	struct bio_vec *bvec = bio->bi_io_vec + bio->bi_vcnt - 1;
 	struct bio_private *p = bio->bi_private;
-	struct bio_vec *bvec;
-	int i;
 
-	bio_for_each_segment_all(bvec, bio, i) {
+	do {
 		struct page *page = bvec->bv_page;
 
-		if (err) {
+		if (--bvec >= bio->bi_io_vec)
+			prefetchw(&bvec->bv_page->flags);
+		if (!uptodate) {
 			SetPageError(page);
 			if (page->mapping)
 				set_bit(AS_EIO, &page->mapping->flags);
@@ -651,7 +653,7 @@ static void f2fs_end_io_write(struct bio *bio, int err)
 		}
 		end_page_writeback(page);
 		dec_page_count(p->sbi, F2FS_WRITEBACK);
-	}
+	} while (bvec >= bio->bi_io_vec);
 
 	if (p->is_sync)
 		complete(p->wait);

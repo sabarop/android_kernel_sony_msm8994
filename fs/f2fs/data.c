@@ -332,20 +332,23 @@ repeat:
 
 static void read_end_io(struct bio *bio, int err)
 {
-	struct bio_vec *bvec;
-	int i;
+	const int uptodate = test_bit(BIO_UPTODATE, &bio->bi_flags);
+	struct bio_vec *bvec = bio->bi_io_vec + bio->bi_vcnt - 1;
 
-	bio_for_each_segment_all(bvec, bio, i) {
+	do {
 		struct page *page = bvec->bv_page;
 
-		if (!err) {
+		if (--bvec >= bio->bi_io_vec)
+			prefetchw(&bvec->bv_page->flags);
+
+		if (uptodate) {
 			SetPageUptodate(page);
 		} else {
 			ClearPageUptodate(page);
 			SetPageError(page);
 		}
 		unlock_page(page);
-	}
+	} while (bvec >= bio->bi_io_vec);
 	bio_put(bio);
 }
 
