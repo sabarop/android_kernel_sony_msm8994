@@ -48,23 +48,7 @@ static void mpage_end_io(struct bio *bio, int err)
 
 	bio_for_each_segment_all(bv, bio, i) {
 		struct page *page = bv->bv_page;
-
-		if (bio_data_dir(bio) == READ) {
-			if (!err) {
-				SetPageUptodate(page);
-			} else {
-				ClearPageUptodate(page);
-				SetPageError(page);
-			}
-			unlock_page(page);
-		} else { /* bio_data_dir(bio) == WRITE */
-			if (err) {
-				SetPageError(page);
-				if (page->mapping)
-					set_bit(AS_EIO, &page->mapping->flags);
-			}
-			end_page_writeback(page);
-		}
+		page_endio(page, bio_data_dir(bio), err);
 	}
 
 	bio_put(bio);
@@ -108,8 +92,8 @@ mpage_alloc(struct block_device *bdev,
  * them.  So when the buffer is up to date and the page size == block size,
  * this marks the page up to date instead of adding new buffers.
  */
-static void 
-map_buffer_to_page(struct page *page, struct buffer_head *bh, int page_block) 
+static void
+map_buffer_to_page(struct page *page, struct buffer_head *bh, int page_block)
 {
 	struct inode *inode = page->mapping->host;
 	struct buffer_head *page_bh, *head;
@@ -120,9 +104,9 @@ map_buffer_to_page(struct page *page, struct buffer_head *bh, int page_block)
 		 * don't make any buffers if there is only one buffer on
 		 * the page and the page just needs to be set up to date
 		 */
-		if (inode->i_blkbits == PAGE_CACHE_SHIFT && 
+		if (inode->i_blkbits == PAGE_CACHE_SHIFT &&
 		    buffer_uptodate(bh)) {
-			SetPageUptodate(page);    
+			SetPageUptodate(page);
 			return;
 		}
 		create_empty_buffers(page, 1 << inode->i_blkbits, 0);
@@ -239,7 +223,6 @@ do_mpage_readpage(struct bio *bio, struct page *page, unsigned nr_pages,
 			map_buffer_to_page(page, map_bh, page_block);
 			goto confused;
 		}
-	
 		if (first_hole != blocks_per_page)
 			goto confused;		/* hole -> non-hole */
 
