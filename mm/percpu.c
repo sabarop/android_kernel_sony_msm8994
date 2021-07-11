@@ -473,11 +473,9 @@ static int pcpu_alloc_area(struct pcpu_chunk *chunk, int size, int align)
 		 * uncommon for percpu allocations.
 		 */
 		if (head && (head < sizeof(int) || !(p[-1] & 1))) {
-			*p = off += head;
 			if (p[-1] & 1)
 				chunk->free_size -= head;
-			else
-				max_contig = max(*p - p[-1], max_contig);
+			*p = off += head;
 			this_size -= head;
 			head = 0;
 		}
