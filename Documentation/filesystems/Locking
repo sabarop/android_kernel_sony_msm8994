@@ -344,7 +344,7 @@ prototypes:
 
 
 locking rules:
-			inode->i_lock	may block
+			file_lock_lock	may block
 fl_copy_lock:		yes		no
 fl_release_private:	maybe		no
 

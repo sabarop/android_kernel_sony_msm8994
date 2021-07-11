@@ -1091,7 +1091,6 @@ struct lock_to_push {
 static int
 cifs_push_posix_locks(struct cifsFileInfo *cfile)
 {
-	struct inode *inode = cfile->dentry->d_inode;
 	struct cifs_tcon *tcon = tlink_tcon(cfile->tlink);
 	struct file_lock *flock, **before;
 	unsigned int count = 0, i = 0;
@@ -1102,12 +1101,12 @@ cifs_push_posix_locks(struct cifsFileInfo *cfile)
 
 	xid = get_xid();
 
-	spin_lock(&inode->i_lock);
-	cifs_for_each_lock(inode, before) {
+	lock_flocks();
+	cifs_for_each_lock(cfile->dentry->d_inode, before) {
 		if ((*before)->fl_flags & FL_POSIX)
 			count++;
 	}
-	spin_unlock(&inode->i_lock);
+	unlock_flocks();
 
 	INIT_LIST_HEAD(&locks_to_send);
 
@@ -1126,8 +1125,8 @@ cifs_push_posix_locks(struct cifsFileInfo *cfile)
 	}
 
 	el = locks_to_send.next;
-	spin_lock(&inode->i_lock);
-	cifs_for_each_lock(inode, before) {
+	lock_flocks();
+	cifs_for_each_lock(cfile->dentry->d_inode, before) {
 		flock = *before;
 		if ((flock->fl_flags & FL_POSIX) == 0)
 			continue;
@@ -1152,7 +1151,7 @@ cifs_push_posix_locks(struct cifsFileInfo *cfile)
 		lck->offset = flock->fl_start;
 		el = el->next;
 	}
-	spin_unlock(&inode->i_lock);
+	unlock_flocks();
 
 	list_for_each_entry_safe(lck, tmp, &locks_to_send, llist) {
 		int stored_rc;
