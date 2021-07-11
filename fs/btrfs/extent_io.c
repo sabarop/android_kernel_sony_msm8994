@@ -2475,7 +2475,7 @@ static void end_bio_extent_readpage(struct bio *bio, int err)
 
 		spin_lock(&tree->lock);
 		state = find_first_extent_bit_state(tree, start, EXTENT_LOCKED);
-		if (likely(state && state->start == start)) {
+		if (state && state->start == start) {
 			/*
 			 * take a reference on the state, unlock will drop
 			 * the ref
@@ -2485,8 +2485,7 @@ static void end_bio_extent_readpage(struct bio *bio, int err)
 		spin_unlock(&tree->lock);
 
 		mirror = io_bio->mirror_num;
-		if (likely(uptodate && tree->ops &&
-			   tree->ops->readpage_end_io_hook)) {
+		if (uptodate && tree->ops && tree->ops->readpage_end_io_hook) {
 			ret = tree->ops->readpage_end_io_hook(page, start, end,
 							      state, mirror);
 			if (ret)
@@ -2495,15 +2494,12 @@ static void end_bio_extent_readpage(struct bio *bio, int err)
 				clean_io_failure(start, page);
 		}
 
-		if (likely(uptodate))
-			goto readpage_ok;
-
-		if (tree->ops && tree->ops->readpage_io_failed_hook) {
+		if (!uptodate && tree->ops && tree->ops->readpage_io_failed_hook) {
 			ret = tree->ops->readpage_io_failed_hook(page, mirror);
 			if (!ret && !err &&
 			    test_bit(BIO_UPTODATE, &bio->bi_flags))
 				uptodate = 1;
-		} else {
+		} else if (!uptodate) {
 			/*
 			 * The generic bio_readpage_error handles errors the
 			 * following way: If possible, new read requests are
@@ -2524,7 +2520,7 @@ static void end_bio_extent_readpage(struct bio *bio, int err)
 				continue;
 			}
 		}
-readpage_ok:
+
 		if (uptodate && tree->track_uptodate) {
 			set_extent_uptodate(tree, start, end, &cached,
 					    GFP_ATOMIC);
